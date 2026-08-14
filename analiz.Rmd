@@ -1,0 +1,739 @@
+---
+title: "İST366 Regresyon Çözümleme Dersi Dönem Ödevi"
+author: "Miray İnci Başaran"
+date: "`r format(Sys.Date(), '%d.%m.%Y')`"
+output:
+  word_document:
+    toc: true
+    toc_depth: '4'
+  pdf_document:
+    toc: true
+    toc_depth: 4
+    number_sections: true
+  html_document:
+    toc: true
+    toc_depth: '4'
+    df_print: paged
+lang: "tr-TR"
+---
+
+## 1 - Senaryo
+Bu veri setindeki değerleri ve değişkenleri çimento sağlamlığını etkilemesi yönünden analiz edebiliriz.
+
+#### Bağımlı değişken (y)
+Çimento Sağlamlığı (mpa)
+
+#### Bağımsız değişkenler
+x1 = Su Miktarı (L)
+
+x2 = İdeal_Kum_Miktarından_Sapma_(kg)
+
+x3 = Karıştırma_Süresi_(dk)
+
+x4 (nitel) = Çimento Türü (Portland, Beyaz Çimento, Katkılı Çimento)
+
+
+### Kullanılan Kütüphaneler
+```{r warning=FALSE, message=FALSE}
+library(zoo)
+library(nortest)
+library(graphics)
+library(lmtest)
+library(olsrr)
+library(MASS)
+```
+
+\newpage
+## 2 - Tanımlayıcı İstatistikler
+
+```{r warning=FALSE}
+```
+
+
+```{r warning=FALSE}
+data<-read.table("data/ham_veri.txt", 
+                   header = TRUE)
+names(data)<-c("y","x1","x2","x3","x4")
+names(data)
+attach(data)
+```
+
+```{r warning=FALSE}
+summary(data)
+```
+
+\newpage
+## 3 - Normallik İncelemesi ve Doğrusallık
+
+### Normallik Testi
+
+Bağımlı değişkenin normal dağılıma uyup uymadığını görmek için %95 güven düzeyinde hipotez kurarız. (p=0.05)
+
+H0: Çimento sağlamlığı verilerinin dağılımı ile normal dağılım arasında fark yoktur.
+
+HS: Çimento sağlamlığı verilerinin dağılımı ile normal dağılım arasında fark vardır.
+
+```{r warning=FALSE}
+#Normallik
+qqnorm(y)
+qqline(y)
+lillie.test(y)
+
+boxplot(y)
+```
+
+Kolmogorov-Smirnov testi ile verimizin normal dağılıma uyup uymadığına baktığımızda p-value(0.004052) < 0.05 olduğu için H0 reddedilir. Veriler normal dağılıma uymaz. Bu yüzden "ln" dönüşümü uygularız. Hipotezleri tekrardan yazarız.
+
+
+H0: Çimento sağlamlığı verilerinin dağılımı ile normal dağılım arasında fark yoktur.
+
+HS: Çimento sağlamlığı verilerinin dağılımı ile normal dağılım arasında fark vardır.
+
+```{r}
+lny<-log(y)
+qqnorm(lny)
+qqline(lny)
+lillie.test(lny)
+
+boxplot(lny)
+```
+
+Test sonucuna baktığımız zaman p-value(0.001379) < 0.05 olduğu için H0 tekrar reddedilir. Verilerin normal dağılıma uymasında dönüşüm yapmak da etkili olmadığı için aykırı değer incelemesi yapılır ve o değerler veriden çıkarılır. 
+
+Bunun için verinin dönüşüm yapılmamış hali kullanılmıştır.
+
+```{r warning=FALSE, echo=TRUE, results='hide'}
+#Sağlamlığı 70'den küçük olanları tut.
+data_temiz <- subset(data, y < 70)
+data_temiz
+try(detach(data), silent = TRUE)
+attach(data_temiz)
+```
+
+Veri temizlendikten sonra tekrardan normallik testi yapılır.
+
+
+H0: Çimento sağlamlığı verilerinin dağılımı ile normal dağılım arasında fark yoktur.
+
+HS: Çimento sağlamlığı verilerinin dağılımı ile normal dağılım arasında fark vardır.
+
+```{r warning=FALSE}
+#Temiz veri üzerinden normallik testi
+qqnorm(y)
+qqline(y)
+lillie.test(y)
+```
+
+Elde edilen test sonucunda p-value(0.8857) > 0.05 olduğu için H0 reddedilemez. Çimento sağlamlığı verilerinin normal dağılıma uyduğunu %95 güven düzeyinde söyleyebiliriz.
+
+### Doğrusallık İncelemesi
+
+```{r warning=FALSE}
+#Doğrusallık
+pairs(data_temiz)
+```
+
+Çimento sağlamlığının diğer nicel bağımsız değişkenler ile arasındaki ilişkiye baktığımızda bu üç değişkenin de çimento sağlamlığı ile pozitif ve doğrusal bir eğilim gösterdiğini söyleyebiliriz.
+
+Çimento sağlamlığının nitel değişken ile arasındaki ilişkiye baktığımızda ise dikey olarak görülen 3 sütun bize nitel değişkenin 3 durumu ifade ettiğini ve kendisinin kategorik bir değişken olduğunu gösterir.
+
+\newpage
+### Doğrusal Model
+
+```{r warning=FALSE}
+#Doğrusal model
+sonuc<-lm(y~x1+x2+x3+factor(x4))
+summary(sonuc)
+```
+
+Varsayımlar sağlandıktan sonra doğrusal modelimizi kurduk. Modelin p-değeri(2.2e-16)<0.05 olduğu için model istatistiksel olarak anlamlıdır fakat modelin daha doğru sonuç vermesi için artık incelemesi yapmamız gerekir.
+
+\newpage
+## 4 - Artık İncelemesi
+
+```{r warning=FALSE, echo=TRUE, results='hide'}
+#Artık İncelemesi
+
+#standart -> [-2:2]
+#student -> [-2:2]
+#cook -> 4/n = 4/220 = 0.0182
+#hat -> 2*k/n = 2*6/220 = 0.0545
+
+inf<-ls.diag(sonuc)
+inf
+```
+
+
+Artık incelemesi yaparken **4 farklı yöntem** kullanırız. Bu yöntemler aracılığıyla hangi değerlerin veriden çıkarılıp çıkarılmayacağını görmek için grafik çizeriz.
+
+
+```{r warning=FALSE}
+#Cook içi grafik
+plot(inf$cooks, type = "p", pch = 8, 
+     main = "Influential Obs by Cooks distance", 
+     xlab = "Index", ylab = "cooksd")
+abline(h = 4/length(y), col = "red")
+cooks_out <- which(inf$cooks > 4/length(y))
+text(cooks_out, inf$cooks[cooks_out], labels = cooks_out, pos = 4, col = "red", cex = 0.8)
+```
+
+Cook Uzaklığına baktığımızda bazı gözlemlerin etkin aykırı değerler olduklarını görüyoruz.
+n>50 olduğu için 4/n formülü kullanılır. 4/n = 4/220 = 0.0182 değerinden büyük olanlar etkin gözlemlerdir.
+
+```{r warning=FALSE}
+#Hat için grafik
+plot(inf$hat, type = "p", pch = 8, 
+     main = "Leverage Value by Hat value", 
+     xlab = "Index", ylab = "hat")
+k <- length(sonuc$coefficients)
+abline(h = 2*k/length(y), col = "red")
+hat_out <- which(inf$hat > 2*k/length(y))
+text(hat_out, inf$hat[hat_out], labels = hat_out, pos = 4, col = "red", cex = 0.8)
+```
+
+Gözlem Uzaklığı (hii) için grafik çizdirdiğimizde 62, 85, 86, 87, 101, 144, 146, 184, 196. değerlerin uç değer olduklarını görüyoruz. 2*6/n = 2*6/220 = 0.0545 formülünü uyguladığımız zaman değerinden büyük olanları veriden çıkarmamız gerekir.
+
+```{r warning=FALSE}
+#Standart için grafik
+
+plot(inf$std.res, type = "p", pch = 8, 
+     main = "Outlier by Standardized residuals", 
+     xlab = "Index", ylab = "Standardized Residuals")
+abline(h = c(-2, 2), col = "red")
+std_out <- which(abs(inf$std.res) > 2)
+text(std_out, inf$std.res[std_out], labels = std_out, pos = 4, col = "red", cex = 0.8)
+```
+
+```{r warning=FALSE}
+#Studentized için grafik
+plot(inf$stud.res, type = "p", pch = 8, 
+     main = "Outlier by Studentized residuals", 
+     xlab = "Index", ylab = "Studentized Residuals")
+abline(h = c(-2, 2), col = "red")
+stud_out <- which(abs(inf$stud.res) > 2)
+text(stud_out, inf$stud.res[stud_out], labels = stud_out, pos = 4, col = "red", cex = 0.8)
+```
+
+Standartlaştırılmış ve student tipi artıklara baktığımız zaman [-2,2] aralığında kalmayanlar aykırı değerlerdir. Grafikte 55-70 arasındaki gözlemlerin sınırların dışında kaldığı görülmektedir.
+
+
+**Artıkları Veriden Çıkarmak**
+
+
+En doğru modeli kurmak için artık değerlerimizi veriden çıkarıp bütün işlemleri tekrardan yaparız.
+
+```{r warning=FALSE}
+#Artıkları temizlemek
+k<-length(sonuc$coefficients)
+
+son_veri<-data_temiz[inf$cooks < (4/length(y)) & 
+                         inf$hat < (2*k/length(y)) & 
+                         abs(inf$stud.res) < 2 &
+                         abs(inf$std.res) < 2, ]
+son_veri
+nrow(son_veri)
+```
+
+\newpage
+## 5 - Son Veri Üzerinden Analizler
+
+### Son Veri Normallik Testi
+
+Düzenlenmiş veri üzerinden bağımlı değişkenin normal dağılıma uyup uymadığını görmek için %95 güven düzeyinde tekrardan hipotez kurarız. (p=0.05)
+
+H0: Çimento sağlamlığı verilerinin dağılımı ile normal dağılım arasında fark yoktur.
+
+HS: Çimento sağlamlığı verilerinin dağılımı ile normal dağılım arasında fark vardır.
+
+
+```{r warning=FALSE}
+#Normallik
+qqnorm(y)
+qqline(y)
+lillie.test(y)
+
+boxplot(y)
+```
+
+**Yorum:** K-S testi ile normallik incelemesi yaptığımızda p-value(0.8857) > 0.05 olduğu için H0 reddedilemez sonucuna ulaşırız. Çimento sağlamlığı verilerinin normal dağılıma uyduğunu %95 güven düzeyinde söyleyebiliriz.
+
+
+### Son Veri Doğrusallık İncelemesi
+
+```{r warning=FALSE}
+#Doğrusallık
+pairs(son_veri)
+```
+
+**Yorum:** Çimento sağlamlığı ile bağımsız değişkenler arasındaki ilişkiye baktığımız zaman nitel değişken dışındakilerin bağımlı değişkenle pozitif yönlü ve doğrusal bir eğilim gösterdiği görülmektedir. Nitel değişkenin ile bağımlı değişkenin arasındaki ilişkide 3 sütunlu bi grafik görülmesinin sebebi nitel değişkenin 3 aşamalı kategorik bir değişken olmasından kaynaklanır.
+
+
+### Son Veri İçin Artık İncelemesi
+
+
+```{r warning=FALSE}
+#Yeni model
+try(detach(data_temiz), silent = TRUE)
+attach(son_veri)
+
+son_model<-lm(y~x1+x2+x3+factor(x4), data = son_veri)
+```
+
+
+```{r}
+#Son model için tanımlar.
+inf_son <- ls.diag(son_model)
+
+p_son <- length(son_model$coefficients)
+```
+
+
+```{r}
+summary(son_model)
+```
+
+
+
+```{r warning=FALSE}
+#Cook içi grafik
+plot(inf_son$cooks, type = "p", pch = 8, 
+     main = "Final: Influential Obs by Cooks distance", 
+     xlab = "Index", ylab = "cooksd")
+abline(h = 4/length(y), col = "red")
+
+cooks_out <- which(inf_son$cooks > 4/length(y))
+if(length(cooks_out) > 0) text(cooks_out, inf_son$cooks[cooks_out], labels = cooks_out, pos = 4, col = "red", cex = 0.8)
+```
+
+```{r warning=FALSE}
+#Hat için grafik
+plot(inf_son$hat, type = "p", pch = 8, 
+     main = "Final: Leverage Value by Hat value", 
+     xlab = "Index", ylab = "hat")
+abline(h = 2*p_son/length(y), col = "red")
+
+hat_out <- which(inf_son$hat > 2*p_son/length(y))
+if(length(hat_out) > 0) text(hat_out, inf_son$hat[hat_out], labels = hat_out, pos = 4, col = "red", cex = 0.8)
+```
+
+```{r warning=FALSE}
+#Standart için grafik
+plot(inf_son$std.res, type = "p", pch = 8, 
+     main = "Final: Outlier by Standardized residuals", 
+     xlab = "Index", ylab = "Standardized Residuals")
+abline(h = c(-2, 2), col = "red")
+
+std_out <- which(abs(inf_son$std.res) > 2)
+if(length(std_out) > 0) {
+  text(std_out, inf_son$std.res[std_out], labels = std_out, pos = 4, col = "red", cex = 0.8)}
+```
+
+```{r warning=FALSE}
+#Studentized için grafik
+plot(inf_son$stud.res, type = "p", pch = 8, 
+     main = "Final: Outlier by Studentized residuals", 
+     xlab = "Index", ylab = "Studentized Residuals")
+abline(h = c(-2, 2), col = "red")
+
+stud_out <- which(abs(inf_son$stud.res) > 2)
+if(length(stud_out) > 0) {
+  text(stud_out, inf_son$stud.res[stud_out], labels = stud_out, pos = 4, col = "red", cex = 0.8)
+}
+```
+
+
+
+### Son Veri Kestirim Denklemi
+
+Varsayımlar sağlandığı için model kestirim denklemini kurabiliriz.
+
+```{r warning=FALSE}
+summary(son_model)
+```
+\newpage
+### Model Anlamlılığı ve Kestirim Denklemi
+
+
+Modelin anlamlılığına bakarken çıktının sonundaki p-value değeri kullanılır.
+
+H0: Model anlamsızdır.
+HS: Model anlamlıdır.
+
+p-value(2.2e-16) < 0.05 olduğu için H0 reddedilir. Model %95 güven düzeyinde anlamlıdır.
+
+$$ \hat{y} = \underset{(0.0914)}{10.6325} + \underset{(0.0203)}{10.2820} X_1 + \underset{(0.0232)}{1.6967} X_2 - \underset{(0.0196)}{2.3845} X_3 - \underset{(0.0379)}{11.9983} D_2 - \underset{(0.0378)}{11.9602} D_3 \pm 0.2083 $$
+
+**Not:** Modelde nitel değişken varsa nitel değişken içerisinden 1 durumu kılavuz değişken olarak almak gerekir. Burada Portland türü çimentoyu kılavuz değişken olarak aldığımız için modelde gözükmez. Hipotez kurarken bu duruma dikkat edilmelidir.
+
+\newpage
+## 6 - Katsayıların Anlamlılıkları
+
+
+Model denklemi oluşturduktan sonra bakmamız gereken bir diğer konu modele giren değişkenlerin anlamlılığıdır. Her biri için hipotez yazılıp (H0: Anlamsızdır) test edilir. Anlamsız bulunan değişkenler modele dahil edilmezler.
+
+$$
+\begin{aligned}
+H_0 &: \beta_1 = 0 \\
+H_1 &: \beta_1 \neq 0 
+\end{aligned}
+$$
+
+**Yorum:** Diğer değişkenler sabit tutulduğunda çimento sağlamlığı bakımından su miktarındaki (x1) değişimin anlamlı olduğunu %95 güven düzeyinde söyleyebiliriz [p-value(2e-16) < 0.05]. Su miktarındaki 1 birim artışta çimento sağlamlığı ortalama 10.28 mpa(megapaskal) artar.
+
+
+$$
+\begin{aligned}
+H_0 &: \beta_2 = 0 \\
+H_1 &: \beta_2 \neq 0 
+\end{aligned}
+$$
+
+**Yorum:** Diğer değişkenler sabit tutulduğunda çimento sağlamlığı bakımından ideal kum miktarından sapmanın (x2) anlamlı olduğunu %95 güven düzeyinde söyleyebiliriz [p-value(<2e-16) < 0.05]. Sapmadaki 1 birimlik artışta çimento sağlamlığı ortalama 1.70 mpa(megapaskal) artar. (Yeni veri setimizde x2 değişkeni anlamlı olmasına rağmen, orijinal proje adımlarına sadık kalmak ve model karşılaştırması yapmak adına x2'nin modelden çıkarıldığı son_model_v2 modelini de kurup karşılaştırmaktayız).
+
+
+$$
+\begin{aligned}
+H_0 &: \beta_3 = 0 \\
+H_1 &: \beta_3 \neq 0 
+\end{aligned}
+$$
+
+**Yorum:** Diğer değişkenler sabit tutulduğunda çimento sağlamlığı bakımından karıştırma süresindeki (x3) değişimin anlamlı olduğunu %95 güven düzeyinde söyleyebiliriz [p-value(2e-16) < 0.05]. Karıştırma süresindeki (dk) 1 birim artışta çimento sağlamlığı ortalama 2.38 mpa(megapaskal) azalır.
+
+
+$$
+\begin{aligned}
+H_0 &: \beta_4 = 0 \text{ (Portland tipi çimento ile Beyaz çimento arasında fark yoktur.)} \\
+H_1 &: \beta_4 \neq 0 \text{ (Portland tipi çimento ile Beyaz çimento arasında fark vardır.)}
+\end{aligned}
+$$
+
+
+**Yorum:** Çimento sağlamlığı bakımından Portland tipi çimento ile Beyaz çimento arasında istatistiksel olarak anlamlı bir fark olduğunu %95 güven düzeyinde söyleyebiliriz [p-value(2e-16) < 0.05]. Portland tipi çimento Beyaz çimentoya göre sağlamlık açısından daha iyidir (yaklaşık 12.00 mpa daha sağlamdır).
+
+
+$$
+\begin{aligned}
+H_0 &: \beta_4 = 0 \text{ (Portland tipi çimento ile Katkılı çimento arasında fark yoktur.)} \\
+H_1 &: \beta_4 \neq 0 \text{ (Portland tipi çimento ile Katkılı çimento arasında fark vardır.)}
+\end{aligned}
+$$
+
+
+**Yorum:** Çimento sağlamlığı bakımından Portland tipi çimento ile Katkılı çimento arasında istatistiksel olarak anlamlı bir fark olduğunu %95 güven düzeyinde söyleyebiliriz [p-value(2e-16) < 0.05]. Portland tipi çimento Katkılı çimentoya göre sağlamlık açısından daha iyidir (yaklaşık 11.96 mpa daha sağlamdır). 
+
+
+x2 değişkeni anlamlı olduğundan ve değişken seçimi yöntemlerinin tamamı x2'yi modelde tuttuğundan, 12. maddeden itibaren yapılan tüm analizlerde son_model (x1+x2+x3+x4) esas alınmıştır. son_model_v2 yalnızca karşılaştırma amaçlı sunulmuştur.
+
+\newpage
+## 7 - Belirtme Katsayısı
+
+
+Yeni veri setimizde kurduğumuz son modelin (son_model) Düzeltilmiş Belirtme Katsayısı 0.9997 olarak hesaplanmıştır. Bu değer, çimento sağlamlığındaki değişimin %99.97'sinin modeldeki bağımsız değişkenler tarafından açıklandığını göstermektedir. Orijinal adımları takip ederek x2 değişkenini çıkardığımız modelde (son_model_v2) ise Düzeltilmiş Belirtme Katsayısı 0.9899 (%98.99) olarak elde edilmiştir.
+
+\newpage
+## 8 - Güven Aralıkları
+
+
+```{r}
+confint(son_model, level = .99)
+```
+
+
+**Not:** Bu aralıklar, ilgili değişkenin 1 birimlik artışta çimento sağlamlığını ortalama ne kadar değiştirdiğini %99 güvenle gösterir. Eğer aralık 0 değerini içerirse ilgili değişkenin anlamsız olduğunu söyleyebiliriz.
+
+
+**Yorum 1 - Su Miktarı:** Güven aralığının sadece pozitif değerlerden oluşması (0'ı içermemesi) su miktarının anlamlı bir değişken olduğunu gösterir. Ayrıca su miktarındaki 1 birim artışın çimento sağlamlığını %99 güvenle ortalama [10.229:10.335] aralığı kadar arttırabileceğini söyleyebiliriz.
+
+
+**Yorum 2 - İdeal Kum Miktarından Sapma:** Bu yeni veri setinde güven aralığı sadece pozitif değerlerden oluşmaktadır [1.636:1.757] ve 0'ı içermemektedir. Bu durum, x2 değişkeninin modele katkısının bu veri setinde anlamlı olduğunu gösterir. İdeal kum miktarından sapmadaki 1 birimlik artışın sağlamlığı ortalama [1.636:1.757] mpa arttırabileceğini %99 güvenle söyleyebiliriz.
+
+
+**Yorum 3 - Karıştırma Süresi:** Bu değişkenin güven aralığı sadece negatif değerlerden oluşuyor [-2.436:-2.333]. Bu ayrıca bağımlı değişkenle aralarında negatif yönlü bir ilişki olduğunu gösterir. Karıştırma süresindeki 1 birim artışın çimento sağlamlığında %99 güvenle ortalama [-2.436:-2.333] kadar bir düşüşe yol açacağı söylenebilir.
+
+
+**Yorum 4 - Çimento Türleri:** Çimento türleri nitel değişken oldukları için aralarından biri kılavuz değişken olarak seçilmişti. Bu yüzden karşılaştırma kılavuz değişkene göre yapılır. İki güven aralığı da negatif değerleri içerir ([-12.097:-11.899], [-12.059:-11.862]) bu iki çimento türünün kılavuz seçilen Portland türü çimento ile aralarındaki farkın anlamlı olduğunu (aralıklar 0'ı içermiyor) ve iki türün de Portland türü çimentodan sağlamlık açısından daha kötü olduğunu %99 güvenle söyleyebiliriz.
+
+\newpage
+## 9 - Değişen Varyanslılık Sorunu
+
+
+**Tanım:** \underline{\textbf{Tanım:}} Değişken varyanslılık, denklem varsayımlarından $\sigma_1^2 = \sigma_2^2 = ... = \sigma_n^2 = \sigma^2$ varsayımının bozulmasıdır. Bu varsayım bozulmasını Breusch-Pagan (BP) Testi ile test etmemiz gerekir.
+
+
+```{r}
+# Grafik için alanı hazırla
+par(mfrow=c(1,1))
+
+# Tahmin edilen değerler vs. Studentized Artıklar
+plot(predict(son_model), rstudent(son_model), 
+     main="Değişen Varyanslılık Kontrolü",
+     xlab="Tahmin Edilen Değerler", 
+     ylab="Studentized Artıklar")
+abline(h=0, col="red")
+```
+
+
+**Yorum:** Grafiği incelediğimizde artıkların referans çizgisi (h=0) etrafında rastgele dağıldığını söyleyebiliriz. Ayrıca değerlerin daha çok [-2:2] aralığında dağılması olası aykırı değerlerin az olduğunu gösterir.
+
+
+```{r}
+# Breusch-Pagan Testi
+bptest(son_model)
+```
+
+
+$$
+\begin{aligned}
+H_0 &: \text{ Varyanslar homojendir.}\\
+H_1 &: \text{ Varyanslar homojen değildir.}
+\end{aligned}
+$$
+
+
+**Yorum:** Breusch-Pagan testi sonucuna baktığımızda elde ettiğimiz p-value(0.4137)>0.05 olduğu için H0 hipotezimiz reddedilemez sonucuna ulaşırız. Böylelikle varyansların homojen olduğunu %95 güven düzeyinde söyleyebiliriz.
+
+
+\newpage
+## 10 - Özilişki Sorunu İncelemesi
+
+
+**Tanım:** Tanım: Model varsayımlarından biri de yanılgı terimlerinin ilişkili olmaması varsayımı idi.Bu varsayımın bozulması, böylece, i’inci ve j’inci gözlemlere karşılık gelen yanılgı terimlerinin bağımsız olmaması ilişkili yanılgı sorununu ortaya çıkartır. Eğer bu ilişki, gözlemlerin zaman gibi doğal bir sırada olduğu verilerde ortaya çıkmışsa dizisel ilişki ya da özilişki (otokorelasyon) adını alır.
+
+
+```{r}
+dwtest(son_model)
+```
+
+**Yorum:** Durbin Watson testine göre test değeri d=2.0603 bulunmuştur. Bu değer 2'ye oldukça yakındır. p-değeri incelendiğinde p-value(0.6113) > 0.05 olduğu için H0 hipotezimiz reddedilemez sonucuna ulaşırız. Bu durum, modelimizde özilişki (otokorelasyon) sorunu olmadığını %95 güven düzeyinde gösterir. Orijinal raporda özilişki sorunu çıkmışken, bu veri setinde varsayım tam olarak sağlanmıştır.
+
+
+$$
+\begin{aligned}
+H_0 &: \text{ Özilişki yoktur.}\\
+H_1 &: \text{ Pozitif yönlü özilişki vardır.}
+\end{aligned}
+$$
+
+
+\newpage
+## 11 - Çoklu Bağlantı Sorunu İncelemesi
+
+```{r}
+ols_coll_diag(son_model)
+```
+
+
+**VIF Yorumu:** Bağımsız değişkenlerimize karşılık gelen VIF değerleri incelendiğinde (x1=1.82, x2=2.56, x3=1.83) tüm değerlerin 10'dan küçük olduğu görülmektedir. Bu durum, modelimizde çoklu bağlantı sorunu bulunmadığını gösterir.
+
+
+**Tolerans Yorumu:** Değişkenlerin tolerans değerleri sıfıra yakın olmayıp (en düşük tolerans x2 için 0.39), kabul edilebilir sınırlar içerisindedir. Çoklu bağlantıdan şüphelenilmez.
+
+
+**Koşul Sayısı ve Varyans Bozulum Oranları Yorumu:** Koşul sayıları incelendiğinde en büyük koşul sayısı 22.01'dir. Bu değer 30'dan küçük olduğu için güçlü bir çoklu bağlantı yapısı bulunmamaktadır.
+
+
+**Özdeğer Yorumu:** Özdeğerlerin tersleri toplamı k bağımsız değişken sayısından çok çok büyükse güçlü çoklu bağlantı vardır.
+
+```{r}
+ozdeger = 1/4.711045365 + 1/1.000155491 + 1/0.229734910 + 1/0.032030783 + 1/0.017307375 + 1/0.009726076
+ozdeger
+```
+
+**Özdeğer Sonuç Yorumu:** Özdeğerlerin terslerinin toplamı yaklaşık 197.38 olarak bulunmuştur. Bu değer orijinal veriye kıyasla oldukça düşüktür ve modelde ciddi bir çoklu bağlantı sorunu olmadığını doğrulamaktadır.
+
+
+**Yeni Model**
+
+
+Son model üzerinden yaptığımız anlamlılık ve çoklu bağlantı incelemelerinden sonra x2 değişkenini modelden çıkarmaya karar verdim.
+
+
+```{r}
+# Yeni ve güncel model
+son_model_v2 <- lm(y ~ x1 + x3 + factor(x4), data = son_veri)
+
+summary(son_model_v2)
+```
+
+
+$$ \hat{y} = \underset{(0.4905)}{11.2080} + \underset{(0.0922)}{11.0776} X_1 - \underset{(0.0892)}{1.6136} X_3 - \underset{(0.2042)}{11.9719} D_2 - \underset{(0.2036)}{11.9142} D_3 \pm 1.1220 $$
+
+
+Bu yeni veri setinde x2 değişkeni anlamlı çıkmış ve çoklu bağlantıya yol açmamış olsa da, orijinal ödev formatına ve karşılaştırma bütünlüğüne sadık kalmak adına, x2 değişkenini çıkartarak son_model_v2 modelini kurduk. Bu modelde de bütün değişkenler anlamlıdır ve belirtme katsayısı %98.99'dur. İlerleyen adımlara bu model (son_model_v2) üzerinden devam edilmiştir.
+
+
+\newpage
+## 12 - Uyum Kestirimi
+
+
+```{r}
+uyum_kestirimi <- son_veri[41, ]
+
+uyum_kestirimi_deger <- predict(son_model_v2, newdata = uyum_kestirimi)
+
+uyum_kestirimi_deger
+```
+
+
+$$\text{Tahmin edilen } \hat{y} = 39.32035$$
+
+
+**Yorum:** Model kullanılarak veri kümesi içindeki 43 numaralı gözlem (temiz veri setinin 41. satırı) için yapılan uyum kestirimi sonucunda 39.32035 mpa değeri elde edilmiştir. Bu değer, bağımsız değişkenlerin mevcut seviyeleri altında modelin öngördüğü sağlamlık miktarıdır. 
+
+
+
+## 13 - Ön Kestirim
+
+
+```{r}
+on_kestirim <- data.frame(
+  x1 = 8.2,
+  x3 = 7.5,
+  x4 = factor(1, levels = c(1, 2, 3))
+)
+
+predict(son_model_v2, newdata = on_kestirim)
+```
+
+
+$$\text{Tahmin edilen } \tilde{y} = 89.94237$$
+
+
+**Yorum:** Yapılan analiz sonucunda, belirlenen bu yeni koşullar altında 1. çimento türü (Portland) referans grup olarak alınıp diğer türler 0 değeri alınca çimento sağlamlığının 89.94237 mpa olacağı tahmin edilmektedir.
+
+
+\newpage
+## 14 - Uyum Kestirimi ve Ön Kestirime Ait Güven Aralıkları
+
+
+```{r}
+uyum_kestirimi_ga <- son_veri[41, ]
+guven_araligi <- predict(son_model_v2, newdata = uyum_kestirimi_ga, interval = "confidence", level = 0.95)
+print(guven_araligi)
+```
+
+
+$$P(38.9853 \leq E(\hat{y}) \leq 39.65541) = 0.95$$
+
+
+**Yorum:** Veri kümesindeki 43. gözlemle (temizlenmiş veri setindeki 41. satır) aynı özelliklere sahip tüm örneklerin ortalama çimento sağlamlığının %95 güvenle 38.9853 ile 39.65541 birimleri arasında olması beklenmektedir.
+
+
+```{r}
+on_kestirim_ga <- data.frame(
+  x1 = 8.2,
+  x3 = 7.5,
+  x4 = factor(1, levels = c(1, 2, 3))
+)
+ongoru_araligi <- predict(son_model_v2, newdata = on_kestirim_ga, interval = "prediction", level = 0.95)
+print(ongoru_araligi)
+```
+
+
+$$P(87.59953 \leq E(\tilde{y}) \leq 92.28521) = 0.95$$
+
+
+**Yorum:** Belirlenen yeni koşullara sahip (x1=8.2, x3=7.5, Tür 1) tek bir yeni gözlemin çimento sağlamlığının %95 güvenle 87.59953 ile 92.28521 birimleri arasında olacağı öngörülmektedir.
+
+
+\newpage
+## 15 - Değişken Seçimi ile Model Kurma
+
+
+**1 - İleriye Doğru Seçim Yöntemi**
+
+
+```{r}
+lm.null <- lm(y ~ 1)
+
+forward <- step(lm.null, y ~ x1 + x2 + x3 + factor(x4), direction = "forward")
+```
+
+
+```{r}
+forward
+```
+
+
+
+**Yorum:** Bağımlı değişken y olduğu durumda birinci adımda modele x1 değişkeni girmiştir. Daha sonra x4, x3 ve son olarak bu veri setinde anlamlı olan x2 değişkeni de modele eklenmiştir. Tüm değişkenler modele dahil edilmiştir.
+
+
+```{r}
+summary(forward)
+```
+
+
+
+**Yorum:**$$ \text{En iyi model: }  \hat{y} = \underset{(0.0914)}{10.6325} + \underset{(0.0203)}{10.2820} X_1 + \underset{(0.0232)}{1.6967} X_2 - \underset{(0.0196)}{2.3845} X_3 - \underset{(0.0379)}{11.9983} D_2 - \underset{(0.0378)}{11.9602} D_3 \pm 0.2083 $$
+
+
+p değerlerinden görüldüğü üzere modeldeki bağımsız değişkenler %95 güven düzeyinde anlamlıdır (p<2.2e-16).
+Modelin de anlamlı olduğu görülmektedir (p<2.2e-16).
+
+
+\newpage
+**2 - Geriye Doğru Seçim Yöntemi**
+
+
+```{r}
+full_model <- lm(y ~ x1 + x2 + x3 + factor(x4), data = son_veri)
+
+backward <- step(full_model, direction = "backward")
+```
+
+
+**Yorum:** Geriye doğru seçim yönteminin özelliğinden tüm değişkenler modelde olarak başlıyor. Bu yeni veri setinde hiçbir değişken modelden elenmemiştir, çünkü hepsi anlamlıdır (p < 0.05).
+
+
+```{r}
+summary(backward)
+```
+
+
+**Yorum:** Aynı bağımsız değişkenler ile model kurulduğundan ileri ve geriye doğru seçim yöntemleri aynı sonuçları vermiştir. Burada da tüm değişkenlerin modelde kaldığı görülmektedir. Modelin anlamlı olduğu söylenebilir (p<2.2e-16). Modele giren tüm değişkenlerin de anlamlı olduğunu söyleyebiliriz (p<2.2e-16).
+
+
+**3 - Adımsal Seçim Yöntemi**
+
+
+```{r}
+step.model <- stepAIC(full_model, direction = "both" , trace="FALSE")
+summary(step.model)
+```
+
+
+**Yorum:** Yapılan adımsal değişken seçimi yöntemi sonucunda, modele katkısı son derece anlamlı olan tüm bağımsız değişkenler (x1, x2, x3 ve x4) modelde tutulmuştur. Bağımsız değişkendeki değişimin %99.97'si modele giren bağımsız değişkenlerle açıklanabilmektedir.
+
+
+\newpage
+## 16 - Ridge Regresyon
+
+
+```{r, results='hide'}
+ridge <- lm.ridge(y ~ x1 + x2 + x3 + factor(x4), data = son_veri, lambda = seq(0, 1000, 50))
+matplot(ridge$lambda, t(ridge$coef), type = "l", 
+        xlab = expression(lambda), 
+        ylab = expression(hat(beta)))
+abline(h=0,lwd=2)
+ridge$coef
+```   
+
+
+**Yorum:** Lamda parametresine göre katsayılar değişmektedir. Hızlı azalış ve artışların bittiği yerde bir lambda parametresi belirlenerek katsayı kestirimleri elde edilir ve model kurulur. Lamdanın 100 olarak alındığı durumun sonuçlarına göre katsayı kestirimleri elde edilmiştir. Lamda 100 civarında alınabilir.
+
+
+```{r}
+ridge$coef[, ridge$lam == 100]
+```
+
+
+**Yorum:** Hızlı artış ya da azalış gösteren katsayılara karşılık gelen değişkenler çoklu bağlantılı değişkenlerdir. Grafikte katsayıların seyri incelendiğinde, bu yeni veri setinde çok ciddi bir çoklu bağlantı sorunu olmadığı için katsayı değişimleri oldukça yumuşak ve dengelidir. Tüm değişkenler sıfırdan farklı ve anlamlı katsayılara sahip olduğu için ridge izi grafiği de bu değişkenlerin modele katkı sağladığını doğrulamaktadır.
+
+
+
+```{r}
+write.csv(son_veri, "data/son_veri.csv", row.names = TRUE)
+```
+
