@@ -54,19 +54,6 @@ After removing outlying and influential observations, the model fitted on the re
 The categorical predictor is dummy-coded with Portland cement as the reference level, so both
 cement-type coefficients are read as differences relative to Portland.
 
-## Repository Structure
-
-```
-.
-├── analiz.Rmd            # Full analysis (R Markdown, Turkish)
-├── analiz.R              # Same code as a plain R script
-├── data/
-│   ├── ham_veri.txt      # Raw data — input to the analysis
-│   └── son_veri.csv      # Cleaned data after residual diagnostics (n = 196)
-├── rapor.pdf             # Complete report with plots and interpretation (Turkish)
-├── LICENSE
-└── README.md
-```
 
 ## Running the Analysis
 
