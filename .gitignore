@@ -1,0 +1,23 @@
+# R oturum dosyaları
+.Rhistory
+.RData
+.Rapp.history
+.Ruserdata
+.Rproj.user/
+
+# R Markdown ara dosyaları
+*_cache/
+*_files/
+*.knit.md
+*.utf8.md
+
+# İşletim sistemi çöpleri
+.DS_Store
+Thumbs.db
+._*
+
+# Editör
+.vscode/
+.idea/
+*~
+*.swp
