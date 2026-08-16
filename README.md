@@ -48,19 +48,6 @@ Aykırı ve etkin gözlemler çıkarıldıktan sonra kalan 196 gözlemle kurulan
 - İleriye doğru, geriye doğru ve adımsal seçim yöntemlerinin üçü de aynı sonuca ulaşarak
   tüm değişkenleri modelde tutmuştur
 
-## Depo Yapısı
-
-```
-.
-├── analiz.Rmd            # Tüm analiz kodu (R Markdown)
-├── data/
-│   ├── ham_veri.txt      # Ham veri seti (analizin girdisi)
-│   └── son_veri.csv      # Artık incelemesi sonrası temizlenmiş veri (n = 196)
-├── rapor.pdf             # Grafikler ve yorumlarla birlikte tam rapor
-├── LICENSE
-└── README.md
-```
-
 ## Çalıştırma
 
 R (≥ 4.0) ve RStudio gerekir. Gerekli paketler:
